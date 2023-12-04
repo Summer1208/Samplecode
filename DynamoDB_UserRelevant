@@ -1,0 +1,147 @@
+import json
+import boto3
+import logging
+import time
+from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Key
+logger = logging.getLogger(__name__)
+class Relevant:
+    def __init__(self, ddb_client):
+        “”"
+        :param ddb_resource: A Boto3 DynamoDB resource.
+        “”"
+        self.ddb_client = ddb_client
+        self.table = ‘UserRelevantTable’
+    #put item into db
+    def createRelevant(self,user_id,relevant_id, insertinfo):
+        cur_time = str(int(time.time()))
+        item = {
+            “update_time”: {“S”: cur_time},
+            “create_time”: {“S”: cur_time},
+            “delete_status”: {“BOOL”: False},
+            “tag”:{‘L’:insertinfo[‘tag’]},
+            “relevantContent”:{‘S’:insertinfo[‘relevantContent’]},
+            “relevant_gender”:{‘S’:insertinfo[‘relevant_gender’]},
+            “type_id”:{‘S’:insertinfo[‘type_id’]},
+            “user_id”:{‘S’:user_id},
+            “relevant_id”:{‘S’:relevant_id}
+        }
+        try:
+            #param required
+            if user_id==‘’ or relevant_id==‘’:
+                return False
+            response = self.ddb_client.put_item(
+                TableName=self.table,
+                Item=item
+            )
+            return response
+        except ClientError as err:
+            logger.error(
+                “Couldn’t add %s into table %s. Here’s why: %s: %s”,
+                user_id,
+                self.table.name,
+                err.response[“Error”][“Code”],
+                err.response[“Error”][“Message”],
+            )
+            raise
+    #get item from db
+    def getFilteredRelevant(self,user_id,gender):
+        try:
+            response = self.ddb_client.query(
+                TableName=self.table,
+                KeyConditionExpression=“#u=:u”,
+                FilterExpression=“#relevant_gender=:relevant_gender”,
+                ExpressionAttributeNames={
+                    “#u”:“user_id”,
+                    “#relevant_gender”:‘relevant_gender’
+                },
+                ExpressionAttributeValues={
+                    “:u”:{“S”:user_id},
+                    “:relevant_gender”:{“S”:gender}
+                }
+            )
+            return response
+        except ClientError as err:
+            logger.error(
+                “Couldn’t get %s from table %s. Here’s why: %s: %s”,
+                user_id,
+                self.table.name,
+                err.response[“Error”][“Code”],
+                err.response[“Error”][“Message”],
+            )
+            raise
+    def updateRelevant(self,user_id,relevant_id,relevantContent):
+        try:
+            update_time = str(int(time.time()))
+            response = self.ddb_client.update_item(
+                TableName=self.table,
+                UpdateExpression=“SET #relevantContent=:relevantContent,#update_time=:update_time”,
+                Key={
+                    “user_id”:{“S”:user_id},
+                    “relevant_id”:{“S”:relevant_id}
+                },
+                ExpressionAttributeNames={
+                    “#relevantContent”:‘relevantContent’,
+                    “#update_time”:‘update_time’,
+                },
+                ExpressionAttributeValues={
+                    “:relevantContent”:{“S”:relevantContent},
+                    “:update_time”:{“S”:update_time}
+                }
+            )
+            return response
+        except ClientError as err:
+            logger.error(
+                “Couldn’t update %s %s. Here’s why: %s: %s”,
+                user_id,
+                self.table.name,
+                err.response[“Error”][“Code”],
+                err.response[“Error”][“Message”],
+            )
+            raise
+    def deleteRelevant(self,user_id,relevant_id):
+        try:
+            update_time = str(int(time.time()))
+            response = self.ddb_client.update_item(
+                TableName=self.table,
+                UpdateExpression=“SET #delete_status=:delete_status,#update_time=:update_time”,
+                Key={
+                    “user_id”:{“S”:user_id},
+                    “relevant_id”:{“S”:relevant_id}
+                },
+                ExpressionAttributeNames={
+                    “#delete_status”:‘delete_status’,
+                    “#update_time”:‘update_time’,
+                },
+                ExpressionAttributeValues={
+                    “:delete_status”:{“BOOL”:True},
+                    “:update_time”:{“S”:update_time}
+                }
+            )
+            return response
+        except ClientError as err:
+            logger.error(
+                “Couldn’t update %s %s. Here’s why: %s: %s”,
+                user_id,
+                self.table.name,
+                err.response[“Error”][“Code”],
+                err.response[“Error”][“Message”],
+            )
+            raise
+def lambda_handler(event, context):
+    # TODO implement
+    try:
+        db = Relevant(boto3.client(“dynamodb”))
+        #demofor access patten
+        #accesspatten1 = db.getFilteredRelevant(‘user01’,‘male’)
+        #accesspatten2 = db.updateRelevant(‘user01’,‘#1#user_08’,‘test’)
+        #accesspatten3 = db.deleteRelevant(‘user01’,‘#1#user_08’)
+        tag = [{‘S’:‘Sport’}]
+        info =  {‘relevantContent’:‘workmate’,‘relevant_gender’:‘male’,‘type_id’:“1",‘tag’:tag}
+        #accesspatten4 = db.createRelevant(‘user11’,‘#1#user01’,info)
+        return {
+            ‘statusCode’: 200,
+            ‘body’:testdata
+        }
+    except Exception as e:
+        print(f”Something went wrong with this demo,please check the error here: {e}“)
